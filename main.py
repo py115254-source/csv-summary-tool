@@ -1,42 +1,68 @@
 
+"""
+Command-line CSV summary statistics tool.
+"""
+
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 
-def main():
+def calculate_summary(file_path: str) -> pd.DataFrame:
+    """Load a CSV file and calculate statistics for numeric columns."""
+    csv_path = Path(file_path)
+
+    if not csv_path.is_file():
+        raise FileNotFoundError(f"File not found: {csv_path}")
+
+    df = pd.read_csv(csv_path)
+    numeric_df = df.select_dtypes(include="number")
+
+    if numeric_df.empty:
+        return pd.DataFrame(
+            columns=["mean", "median", "std"]
+        )
+
+    return numeric_df.agg(["mean", "median", "std"]).T
+
+
+def main() -> int:
+    """Parse command-line arguments and display CSV statistics."""
     parser = argparse.ArgumentParser(
-        description="Read a CSV file and print summary statistics."
+        description="Print summary statistics for numeric CSV columns."
     )
-    parser.add_argument("file", help="Path to the CSV file")
+    parser.add_argument(
+        "file",
+        help="Path to the input CSV file",
+    )
     args = parser.parse_args()
 
-    file_path = Path(args.file)
-
-    if not file_path.is_file():
-        print(f"Error: File not found: {file_path}")
-        return
-
     try:
-        df = pd.read_csv(file_path)
-        numeric_df = df.select_dtypes(include="number")
+        summary = calculate_summary(args.file)
 
-        if numeric_df.empty:
+        if summary.empty:
             print("No numeric columns found.")
-            return
+            return 0
 
-        summary = numeric_df.agg(["mean", "median", "std"]).T
-        print(f"\nSummary statistics for: {file_path}")
+        print(f"\nSummary statistics for: {args.file}")
         print(summary.to_string())
+        return 0
 
+    except FileNotFoundError as error:
+        print(f"Error: {error}", file=sys.stderr)
+        return 1
     except pd.errors.EmptyDataError:
-        print("Error: The CSV file is empty.")
+        print("Error: The CSV file is empty.", file=sys.stderr)
+        return 1
     except pd.errors.ParserError:
-        print("Error: Could not parse the CSV file.")
+        print("Error: Invalid CSV format.", file=sys.stderr)
+        return 1
     except OSError as error:
-        print(f"Error reading file: {error}")
+        print(f"Error reading file: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
